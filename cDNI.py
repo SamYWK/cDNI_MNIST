@@ -31,11 +31,6 @@ def cDNI(X_train, X_test, y_train, y_test):
     X_placeholder = tf.placeholder(tf.float32, [None, 784])
     y_placeholder = tf.placeholder(tf.float32, [None, 10])
     
-    X = tf.Variable(tf.zeros([n, 784]))
-    X_init = X.assign(X_train)
-    y = tf.Variable(tf.zeros([n, 10]))
-    y_init = y.assign(y_train)
-    
     #add layers
     W1 = tf.Variable(tf.zeros([784, 100]))
     b1 = tf.Variable(tf.zeros([100]))
@@ -94,11 +89,10 @@ def cDNI(X_train, X_test, y_train, y_test):
     
     with tf.Session(config = tf.ConfigProto(allow_soft_placement = True)) as sess:
         sess.run(init)
-        sess.run([X_init, y_init], feed_dict = {})
         for iters in range(100):
             for batch in range(int (n / batch_size)):
-                batch_xs = X[(batch*batch_size) : (batch+1)*batch_size]
-                batch_ys = y[(batch*batch_size) : (batch+1)*batch_size]
+                batch_xs = X_train[(batch*batch_size) : (batch+1)*batch_size]
+                batch_ys = y_train[(batch*batch_size) : (batch+1)*batch_size]
                 if batch % 10 == 0:
                     print(sess.run(cross_entropy, feed_dict = {X_placeholder: batch_xs, y_placeholder: batch_ys}))
                 sess.run([W1_update, W2_update, W3_update, s_W2_update, s_W1_update], feed_dict = {X_placeholder: batch_xs, y_placeholder: batch_ys})
