@@ -29,7 +29,6 @@ def cDNI(X_train, X_test, y_train, y_test):
     n, d = X_train.shape
     numbers = np.array([])
     batch_size = 100
-    learning_rate = 0.01
     iterations = 1
     
     X_placeholder = tf.placeholder(tf.float32, [None, 784])
@@ -38,53 +37,22 @@ def cDNI(X_train, X_test, y_train, y_test):
     #add layers
     W1 = tf.Variable(tf.zeros([784, 100]))
     b1 = tf.Variable(tf.zeros([100]))
-    z1 = tf.matmul(X_placeholder, W1) + b1
+    z1 = tf.matmul(X_placeholder, W1)# + b1
     a1 = tf.nn.sigmoid(z1)
     
     W2 = tf.Variable(tf.random_normal([100, 100]))
     b2 = tf.Variable(tf.random_normal([100]))
-    z2 = tf.matmul(a1, W2) + b2
+    z2 = tf.matmul(a1, W2)# + b2
     a2 = tf.nn.sigmoid(z2)
     
     W3 = tf.Variable(tf.random_normal([100, 10]))
     b3 = tf.Variable(tf.random_normal([10]))
-    z3 = tf.matmul(a2, W3) + b3
+    z3 = tf.matmul(a2, W3)# + b3
     a3 = tf.nn.softmax(z3)
     
     #loss
     cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels = y_placeholder, logits = z3))
     train_step = tf.train.GradientDescentOptimizer(0.01).minimize(cross_entropy)
-    #True gradients
-    W3_gradients = tf.reshape(tf.gradients(ys = cross_entropy, xs = z3), [100, 10])
-    
-    #synthetic gradients
-    s_W1 = tf.Variable(tf.zeros([110, 100]))
-    s_b1 = tf.Variable(tf.zeros([100]))
-    s_z1 = tf.matmul(tf.concat([a1, y_placeholder], 1), s_W1) + s_b1
-    
-    s_W2 = tf.Variable(tf.zeros([110, 100]))
-    s_b2 = tf.Variable(tf.zeros([100]))
-    s_z2 = tf.matmul(tf.concat([a2, y_placeholder], 1), s_W2) + s_b2
-    
-    #Layer Weights Update
-    W1_delta = tf.matmul(tf.transpose(X_placeholder), (a1*(1 - a1) * s_z1))
-    W1_update = W1.assign(W1 - learning_rate * W1_delta)
-    W2_delta = tf.matmul(tf.transpose(a1), (a2*(1 - a2) * s_z2))
-    W2_update = W2.assign(W2 - learning_rate * W2_delta)
-    
-    W3_delta = tf.matmul(tf.transpose(a2), W3_gradients)#True gradients
-    W3_update = W3.assign(W3 - learning_rate * W3_delta)
-    
-    #synthetic Weights Update
-    l2_true_gradients = tf.matmul(W3_gradients, tf.transpose(W3))
-    l2_s_error = tf.reduce_mean(tf.reduce_sum(tf.square(s_z2 - l2_true_gradients), axis = 1))
-    s_W2_delta = tf.reshape(tf.gradients(ys = l2_s_error, xs = s_W2), [110, 100])
-    s_W2_update = s_W2.assign(s_W2 - learning_rate * s_W2_delta)
-    
-    l1_true_gradients = tf.matmul(s_z2, tf.transpose(W2))
-    l1_s_error = tf.reduce_mean(tf.reduce_sum(tf.square(s_z1 - l1_true_gradients), axis = 1))
-    s_W1_delta = tf.reshape(tf.gradients(ys = l1_s_error, xs = s_W1), [110, 100])
-    s_W1_update = s_W1.assign(s_W1 - learning_rate * s_W1_delta)
     
     #prediction
     correct_prediction = tf.equal(tf.argmax(a3,1), tf.argmax(y_placeholder,1))
@@ -98,12 +66,12 @@ def cDNI(X_train, X_test, y_train, y_test):
             for batch in range(int (n / batch_size)):
                 batch_xs = X_train[(batch*batch_size) : (batch+1)*batch_size]
                 batch_ys = y_train[(batch*batch_size) : (batch+1)*batch_size]
-                sess.run([W1_update, W2_update, W3_update, s_W2_update, s_W1_update], feed_dict = {X_placeholder: batch_xs, y_placeholder: batch_ys})
+                sess.run(train_step, feed_dict = {X_placeholder: batch_xs, y_placeholder: batch_ys})
                 if batch % 10 == 0:
                     print(sess.run(cross_entropy, feed_dict = {X_placeholder: batch_xs, y_placeholder: batch_ys}))
                     numbers = np.append(numbers, sess.run(cross_entropy, feed_dict={X_placeholder: batch_xs, y_placeholder: batch_ys}))
         print('Accuracy :', sess.run(accuracy, feed_dict={X_placeholder: X_test, y_placeholder: y_test}))
-    np.savetxt('cDNI_numbers.csv', numbers, delimiter=',')
+    np.savetxt('feed_forward_NN_numbers.csv', numbers, delimiter=',')
     
 def main():
     print('')

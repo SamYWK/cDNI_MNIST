@@ -58,13 +58,13 @@ def cDNI(X_train, X_test, y_train, y_test):
     W3_gradients = tf.reshape(tf.gradients(ys = cross_entropy, xs = z3), [100, 10])
     
     #synthetic gradients
-    s_W1 = tf.Variable(tf.zeros([110, 100]))
+    s_W1 = tf.Variable(tf.zeros([120, 100]))
     s_b1 = tf.Variable(tf.zeros([100]))
-    s_z1 = tf.matmul(tf.concat([a1, y_placeholder], 1), s_W1) + s_b1
+    s_z1 = tf.matmul(tf.concat([a1, y_placeholder, W3_gradients], 1), s_W1) + s_b1
     
-    s_W2 = tf.Variable(tf.zeros([110, 100]))
+    s_W2 = tf.Variable(tf.zeros([120, 100]))
     s_b2 = tf.Variable(tf.zeros([100]))
-    s_z2 = tf.matmul(tf.concat([a2, y_placeholder], 1), s_W2) + s_b2
+    s_z2 = tf.matmul(tf.concat([a2, y_placeholder, W3_gradients], 1), s_W2) + s_b2
     
     #Layer Weights Update
     W1_delta = tf.matmul(tf.transpose(X_placeholder), (a1*(1 - a1) * s_z1))
@@ -78,12 +78,12 @@ def cDNI(X_train, X_test, y_train, y_test):
     #synthetic Weights Update
     l2_true_gradients = tf.matmul(W3_gradients, tf.transpose(W3))
     l2_s_error = tf.reduce_mean(tf.reduce_sum(tf.square(s_z2 - l2_true_gradients), axis = 1))
-    s_W2_delta = tf.reshape(tf.gradients(ys = l2_s_error, xs = s_W2), [110, 100])
+    s_W2_delta = tf.reshape(tf.gradients(ys = l2_s_error, xs = s_W2), [120, 100])
     s_W2_update = s_W2.assign(s_W2 - learning_rate * s_W2_delta)
     
     l1_true_gradients = tf.matmul(s_z2, tf.transpose(W2))
     l1_s_error = tf.reduce_mean(tf.reduce_sum(tf.square(s_z1 - l1_true_gradients), axis = 1))
-    s_W1_delta = tf.reshape(tf.gradients(ys = l1_s_error, xs = s_W1), [110, 100])
+    s_W1_delta = tf.reshape(tf.gradients(ys = l1_s_error, xs = s_W1), [120, 100])
     s_W1_update = s_W1.assign(s_W1 - learning_rate * s_W1_delta)
     
     #prediction
@@ -103,7 +103,7 @@ def cDNI(X_train, X_test, y_train, y_test):
                     print(sess.run(cross_entropy, feed_dict = {X_placeholder: batch_xs, y_placeholder: batch_ys}))
                     numbers = np.append(numbers, sess.run(cross_entropy, feed_dict={X_placeholder: batch_xs, y_placeholder: batch_ys}))
         print('Accuracy :', sess.run(accuracy, feed_dict={X_placeholder: X_test, y_placeholder: y_test}))
-    np.savetxt('cDNI_numbers.csv', numbers, delimiter=',')
+    np.savetxt('cDNI_edit_numbers.csv', numbers, delimiter=',')
     
 def main():
     print('')
