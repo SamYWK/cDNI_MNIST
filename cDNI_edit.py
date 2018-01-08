@@ -30,7 +30,7 @@ def cDNI(X_train, X_test, y_train, y_test):
     numbers = np.array([])
     batch_size = 100
     learning_rate = 0.01
-    iterations = 1
+    iterations = 10
     
     X_placeholder = tf.placeholder(tf.float32, [None, 784])
     y_placeholder = tf.placeholder(tf.float32, [None, 10])
