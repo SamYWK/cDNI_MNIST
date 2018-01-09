@@ -29,7 +29,7 @@ def cDNI(X_train, X_test, y_train, y_test):
     n, d = X_train.shape
     numbers = np.array([])
     batch_size = 100
-    iterations = 10
+    iterations = 100
     
     X_placeholder = tf.placeholder(tf.float32, [None, 784])
     y_placeholder = tf.placeholder(tf.float32, [None, 10])
@@ -45,17 +45,37 @@ def cDNI(X_train, X_test, y_train, y_test):
     z2 = tf.matmul(a1, W2)# + b2
     a2 = tf.nn.sigmoid(z2)
     
-    W3 = tf.Variable(tf.random_normal([100, 10]))
-    b3 = tf.Variable(tf.random_normal([10]))
+    W3 = tf.Variable(tf.random_normal([100, 100]))
+    b3 = tf.Variable(tf.random_normal([100]))
     z3 = tf.matmul(a2, W3)# + b3
-    a3 = tf.nn.softmax(z3)
+    a3 = tf.nn.sigmoid(z3)
+    
+    W4 = tf.Variable(tf.random_normal([100, 100]))
+    b4 = tf.Variable(tf.random_normal([100]))
+    z4 = tf.matmul(a3, W4)# + b4
+    a4 = tf.nn.sigmoid(z4)
+    
+    W5 = tf.Variable(tf.random_normal([100, 100]))
+    b5 = tf.Variable(tf.random_normal([100]))
+    z5 = tf.matmul(a4, W5)# + b5
+    a5 = tf.nn.sigmoid(z5)
+    
+    W6 = tf.Variable(tf.random_normal([100, 100]))
+    b6 = tf.Variable(tf.random_normal([100]))
+    z6 = tf.matmul(a5, W6)# + b6
+    a6 = tf.nn.sigmoid(z6)
+    
+    W7 = tf.Variable(tf.random_normal([100, 10]))
+    b7 = tf.Variable(tf.random_normal([10]))
+    z7 = tf.matmul(a6, W7)# + b7
+    a7 = tf.nn.softmax(z7)
     
     #loss
-    cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels = y_placeholder, logits = z3))
-    train_step = tf.train.GradientDescentOptimizer(0.01).minimize(cross_entropy)
+    cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels = y_placeholder, logits = z7))
+    train_step = tf.train.GradientDescentOptimizer(0.001).minimize(cross_entropy)
     
     #prediction
-    correct_prediction = tf.equal(tf.argmax(a3,1), tf.argmax(y_placeholder,1))
+    correct_prediction = tf.equal(tf.argmax(a7,1), tf.argmax(y_placeholder,1))
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
     
     init = tf.global_variables_initializer()
