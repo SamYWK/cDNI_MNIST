@@ -28,7 +28,7 @@ def load_data(file_name):
 def cDNI(X_train, X_test, y_train, y_test):
     n, d = X_train.shape
     numbers = np.array([])
-    batch_size = 100
+    batch_size = 200
     learning_rate = 0.001
     iterations = 100
     
@@ -36,8 +36,8 @@ def cDNI(X_train, X_test, y_train, y_test):
     y_placeholder = tf.placeholder(tf.float32, [None, 10])
     
     #add layers
-    W1 = tf.Variable(tf.zeros([784, 256]))
-    b1 = tf.Variable(tf.zeros([256]))
+    W1 = tf.Variable(tf.random_normal([784, 256]))
+    b1 = tf.Variable(tf.random_normal([256]))
     z1 = tf.matmul(X_placeholder, W1) + b1
     a1 = tf.nn.sigmoid(z1)
     
