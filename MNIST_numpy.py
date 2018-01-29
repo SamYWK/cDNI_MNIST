@@ -10,7 +10,6 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.preprocessing import MinMaxScaler
-import multiprocessing as mp
 
 def load_data(file_name):
     df = pd.read_csv(file_name)
@@ -71,22 +70,18 @@ class network(object):
         self.weights -= self.inputs.T.dot(grad) * self.alpha
         self.bias -= np.average(grad,axis=0) * self.alpha
         return grad.dot(self.weights.T)
-    
-def network_training():
-    return None
+
 if __name__ == '__main__':
     print('Start')
     X_train, X_test, y_train, y_test = load_data('mnist_train.csv')
     n, d = X_train.shape
     batch_size = 200
-    iterations = 1
+    iterations = 10
     
     layer_1 = network(d, 256, nonlin = sigmoid, nonlin_deriv = sigmoid_out2deriv)
     layer_2 = network(256, 256, nonlin = sigmoid, nonlin_deriv = sigmoid_out2deriv)
     layer_3 = network(256, 10, nonlin = None, nonlin_deriv = None)
-    
-    p1 = mp.Process(target = network_training, args = ())
-    p2 = mp.Process(target = network_training, args = ())
+    results = []
     for iters in range(iterations):
         for batch in range(int (n / batch_size)):
             batch_xs = X_train[(batch*batch_size) : (batch+1)*batch_size]
@@ -100,9 +95,11 @@ if __name__ == '__main__':
             
             if batch % 10 == 0:
                 loss = np.sum(ce)/200
+                results.append(loss)
                 print(loss)
             
             layer_3_delta = a3 - batch_ys
             layer_2_delta = layer_3.backward_pass(layer_3_delta)
             layer_1_delta = layer_2.backward_pass(layer_2_delta)
             layer_1.backward_pass(layer_1_delta)
+    np.savetxt('normal_results.csv', np.asarray(results), delimiter=',')
