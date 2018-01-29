@@ -15,7 +15,7 @@ import time
 
 def load_data(file_name):
     df = pd.read_csv(file_name)
-    X = df.drop(['label'], axis = 1).values
+    X = df.drop(['label'], axis = 1).values.astype(np.float64)
     #normalize X
     scaler = MinMaxScaler()
     X = scaler.fit_transform(X)
@@ -31,13 +31,8 @@ def activation_diff(z, a):
 def cDNI(X_train, X_test, y_train, y_test):
     n, d = X_train.shape
     numbers = np.array([])
-<<<<<<< HEAD
     batch_size = 256
     learning_rate = 0.00003
-=======
-    batch_size = 200
-    learning_rate = 0.001
->>>>>>> c92552247a33267364b3a8a5e26a74508c7859f8
     iterations = 100
     epsilon = 0.0001
     
@@ -46,13 +41,8 @@ def cDNI(X_train, X_test, y_train, y_test):
     y_placeholder = tf.placeholder(tf.float32, [None, 10])
     
     #add layers
-<<<<<<< HEAD
     W1 = tf.Variable(tf.truncated_normal([784, 256], stddev = 0.1))
     b1 = tf.Variable(tf.zeros([256]))
-=======
-    W1 = tf.Variable(tf.random_normal([784, 256]))
-    b1 = tf.Variable(tf.random_normal([256]))
->>>>>>> c92552247a33267364b3a8a5e26a74508c7859f8
     z1 = tf.matmul(X_placeholder, W1) + b1
     mean_1, var_1 = tf.nn.moments(z1, axes = [0])
     scale_1 = tf.Variable(tf.ones([256]))
