@@ -27,6 +27,7 @@ def load_data(file_name):
     return train_test_split(X, y, test_size = 0.2, random_state = 1)
 
 def sigmoid(x):
+    np.seterr( over='ignore' ) #ignore sigmoid overflow
     return 1 / (1 + np.exp(-x))
 
 def sigmoid_out2deriv(out):
@@ -47,88 +48,56 @@ def cross_entropy(logits, labels, epsilon = 1e-12):
 
 class network(object):
     
-    def __init__(self,input_dim, output_dim, nonlin = None, nonlin_deriv = None, alpha = 0.001):
-        
+    def __init__(self,input_dim, output_dim):
         self.weights = np.random.randn(input_dim, output_dim)
         self.bias = np.random.randn(output_dim)
     
-        self.nonlin = nonlin
-        self.nonlin_deriv = nonlin_deriv
-        self.alpha = alpha
-    
-    def forward_pass(self, inputs):
-        self.inputs = inputs
-        if self.nonlin == None :
-            self.outputs = self.inputs.dot(self.weights) + self.bias
-        else:
-            self.outputs = self.nonlin(self.inputs.dot(self.weights) + self.bias)
-        return self.outputs
-    
-    def backward_pass(self,true_gradient):
-        if self.nonlin_deriv == None:
-            grad = true_gradient
-        else:
-            grad = true_gradient * self.nonlin_deriv(self.outputs)
-        
-        self.weights -= self.inputs.T.dot(grad) * self.alpha
-        self.bias -= np.average(grad,axis=0) * self.alpha
-        return grad.dot(self.weights.T)
-    
-def network_training(q, locks, layer_1, layer_2, layer_3, X_train, y_train, process_id):
+def network_training(q, count, Global_variable, X_train, y_train, process_id):
     n, d = X_train.shape
     batch_size = 200
-    iterations = 10
+    iterations = 50
+    learning_rate = 0.001
     
-    #print(process_id, 'process start.')
     for iters in range(iterations):
         for batch in range(int(n / batch_size)):
-            locks[0].acquire()
-            #print(process_id, 'stage_1.')
-            a1 = layer_1.forward_pass(X_train[(batch*batch_size) : (batch+1)*batch_size]) #input
-            locks[0].release()
-               
-            locks[1].acquire()
-            #print(process_id, 'stage_2.') 
-            a2 = layer_2.forward_pass(a1)
-            locks[1].release()
-                
-            locks[2].acquire()
-            #print(process_id, 'stage_3.')
-            z3 = layer_3.forward_pass(a2)
-            a3 = stable_softmax(z3)
-            locks[2].release()
+            inputs = X_train[(batch*batch_size) : (batch+1)*batch_size]
+            ground_truth = y_train[(batch*batch_size) : (batch+1)*batch_size]
             
-            locks[3].acquire()
-            #print(process_id, 'stage_4.')  
-            ce = cross_entropy(logits = a3, labels = y_train[(batch*batch_size) : (batch+1)*batch_size]) #loss
-                        
-            if batch % 10 == 0:
+            a1 = sigmoid(inputs.dot(Global_variable.W1) + Global_variable.b1) #input
+            
+            a2 = sigmoid(a1.dot(Global_variable.W2) + Global_variable.b2)
+
+            z3 = a2.dot(Global_variable.W3) + Global_variable.b3
+            a3 = stable_softmax(z3)
+            
+            ce = cross_entropy(logits = a3, labels = ground_truth) #loss
+            
+            if count.value % 10 == 0:
                 loss = np.sum(ce)/200
                 q.put(loss)
                 print(process_id, ':', loss)
-                        
-            layer_3_delta = a3 - y_train[(batch*batch_size) : (batch+1)*batch_size] #gradient
-            layer_2_delta = layer_3.backward_pass(layer_3_delta)
-            locks[3].release()
-        
-            locks[4].acquire()
-            #print(process_id, 'stage_5.')
-            layer_1_delta = layer_2.backward_pass(layer_2_delta)
-            locks[4].release()
-                
-            locks[5].acquire()
-            #print(process_id, 'stage_6.')
-            layer_1.backward_pass(layer_1_delta)
-            locks[5].release()
+            count.value += 1
+
+            layer_3_delta = a3 - ground_truth #gradient
+            layer_2_delta = layer_3_delta.dot(Global_variable.W3.T)
+            Global_variable.W3 -= a2.T.dot(layer_3_delta) * learning_rate
+            Global_variable.b3 -= np.average(layer_3_delta, axis=0) * learning_rate
+            
+            layer_1_delta = layer_2_delta.dot(Global_variable.W2.T)
+            Global_variable.W2 -= a1.T.dot(layer_2_delta) * learning_rate
+            Global_variable.b2 -= np.average(layer_2_delta, axis=0) * learning_rate
+            
+            Global_variable.W1 -= inputs.T.dot(layer_1_delta) * learning_rate
+            Global_variable.b1 -= np.average(layer_1_delta, axis=0) * learning_rate
             
     #print(process_id, 'process end.')
 
 #inherit BaseManager
-class MyManager(BaseManager):
-    pass
+#class MyManager(BaseManager):
+#    pass
 
 #register shared class
-MyManager.register('network', network)
+#MyManager.register('network', network)
 
 if __name__ == '__main__':
     print('Start')
@@ -136,30 +105,39 @@ if __name__ == '__main__':
     n, d = X_train.shape
     process_num = 6
     section_size = int(n/process_num)
-    
+    np.random.seed(1)
     #start manager
-    manager = MyManager()
-    manager.start()
+    #manager = MyManager()
+    #manager.start()
     
-    layer_1 = manager.network(d, 256, nonlin = sigmoid, nonlin_deriv = sigmoid_out2deriv)
-    layer_2 = manager.network(256, 256, nonlin = sigmoid, nonlin_deriv = sigmoid_out2deriv)
-    layer_3 = manager.network(256, 10, nonlin = None, nonlin_deriv = None)
+    #layer_1 = manager.network(d, 256, nonlin = sigmoid, nonlin_deriv = sigmoid_out2deriv)
+    layer_1 = network(d, 256)
+    layer_2 = network(256, 256)
+    layer_3 = network(256, 10)
     
-    #create locks
-    locks = []
-    for _ in range(6):
-        locks.append(mp.Lock())
+    #shared variables
+    manager = mp.Manager()
+    Global_variable = manager.Namespace()
+    count = mp.Value('i', 0)
+    
+    Global_variable.W1 = layer_1.weights
+    Global_variable.W2 = layer_2.weights
+    Global_variable.W3 = layer_3.weights
+    Global_variable.b1 = layer_1.bias
+    Global_variable.b2 = layer_2.bias
+    Global_variable.b3 = layer_3.bias
+    
     #create queue
     mp_manager = mp.Manager()
     q = mp_manager.Queue()
-        
+    
     #create processes
     processes = []
     for process in range(process_num):
-        p = mp.Process(target = network_training, args = (q, locks, layer_1, layer_2, layer_3,\
+        p = mp.Process(target = network_training, args = (q, count, Global_variable,\
             X_train[(process*section_size) : (process+1)*section_size], y_train[(process*section_size) : (process+1)*section_size], process))
         processes.append(p)
-    
+    start_time = time.time()
     #start process
     for process in processes:
         process.start()
@@ -167,10 +145,11 @@ if __name__ == '__main__':
     #join process
     for process in processes:
         process.join()
-    
+    end_time = time.time()
     #save results
     results = []
     for _ in range(q.qsize()):
         results.append(q.get())
         
     np.savetxt('parallel_results.csv', np.asarray(results), delimiter=',')
+    print("It cost %f sec" % (end_time-start_time))
