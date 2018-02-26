@@ -39,18 +39,48 @@ def main():
     X_train, X_test, y_train, y_test = load_data('mnist_train.csv')
     n, d = X_train.shape
     batch_size = 200
-    iterations = 10
+    iterations = 100
+    learning_rate = 0.00001
     np.random.seed(1)
     
     X_placeholder = tf.placeholder(tf.float32, [None, 784])
     y_placeholder = tf.placeholder(tf.float32, [None, 10])
     
-    x1, W1, b1 = add_layer(X_placeholder, 784, 256, tf.nn.sigmoid)
-    y_weights = tf.Variable(tf.tf.random_normal([]))
-    y_ = tf.matmul(y_placeholder, 784)
-    y1 = add_layer(y_, 256, tf.nn.sigmoid)
+    #layer 1
+    x1 = tf.layers.dense(X_placeholder, 256, tf.nn.relu)
+    y_transform_weight = tf.random_normal([10, 784])
+    y_ = tf.stop_gradient(tf.matmul(y_placeholder, y_transform_weight))
+    y1 = tf.layers.dense(y_, 256, trainable = None)
+    loss_1 = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels = y1, logits = x1))
+    train_step_1 = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss_1)
     
-    loss = 
+    #layer 2
+    stop_x1 = tf.stop_gradient(x1)
+    stop_y1 = tf.stop_gradient(y1)
+    x2, W2, b2 = add_layer(stop_x1, 256, 10, None)
+    y2 = tf.nn.sigmoid(tf.matmul(stop_y1, W2) + b2)
+    
+    loss_2 = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels = y2, logits = x2))
+    train_step_2 = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss_2)
+    
+    #test error
+    correct_prediction = tf.equal(tf.argmax(x2,1), tf.argmax(y_placeholder,1))
+    accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+    
+    #initializer
+    init = tf.global_variables_initializer()
+    
+    with tf.Session(config = tf.ConfigProto(allow_soft_placement = True)) as sess:
+        sess.run(init)
+        for iters in range(iterations):
+            for batch in range(int (n / batch_size)):
+                batch_xs = X_train[(batch*batch_size) : (batch+1)*batch_size]
+                batch_ys = y_train[(batch*batch_size) : (batch+1)*batch_size]
+                
+                sess.run([train_step_1], feed_dict = {X_placeholder : batch_xs, y_placeholder : batch_ys})
+                if batch % 50 == 0:
+                    print(sess.run([y_transform_weight], feed_dict = {X_placeholder : batch_xs, y_placeholder : batch_ys}))
+                #print(sess.run(accuracy, feed_dict = {X_placeholder : batch_xs, y_placeholder : batch_ys}))
 
 if __name__ == '__main__':
     main()
