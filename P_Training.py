@@ -62,21 +62,8 @@ def main():
     loss_2 = tf.losses.mean_squared_error(labels = y2, predictions = x2)
     train_step_2 = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss_2)
     
-    #layer 3
-    stop_x2 = tf.stop_gradient(x2)
-    stop_y2 = tf.stop_gradient(y2)
-    x3 = tf.layers.dense(stop_x2, 256, tf.nn.relu)
-    y3 = tf.layers.dense(stop_y2, 256, trainable = None, activation = tf.nn.relu)
-    loss_3 = tf.losses.mean_squared_error(labels = y3, predictions = x3)
-    train_step_3 = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss_3)
+    #backward 2
     
-    #layer 4
-    stop_x3 = tf.stop_gradient(x3)
-    stop_y3 = tf.stop_gradient(y3)
-    x4 = tf.layers.dense(stop_x3, 10, tf.nn.relu)
-    y4 = tf.layers.dense(stop_y3, 10, trainable = None, activation = tf.nn.relu)
-    loss_4 = tf.losses.mean_squared_error(labels = y4, predictions = x4)
-    train_step_4 = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss_4)
     
     #test error
     correct_prediction = tf.equal(tf.argmax(x4,1), tf.argmax(y_placeholder,1))
@@ -92,7 +79,7 @@ def main():
                 batch_xs = X_train[(batch*batch_size) : (batch+1)*batch_size]
                 batch_ys = y_train[(batch*batch_size) : (batch+1)*batch_size]
                 
-                sess.run([train_step_1, train_step_2, train_step_3, train_step_4], feed_dict = {X_placeholder : batch_xs, y_placeholder : batch_ys})
+                sess.run([train_step_1, train_step_2], feed_dict = {X_placeholder : batch_xs, y_placeholder : batch_ys})
                 if batch % 50 == 0:
                     print(sess.run([loss_4], feed_dict = {X_placeholder : batch_xs, y_placeholder : batch_ys}))
                 #print(sess.run(accuracy, feed_dict = {X_placeholder : batch_xs, y_placeholder : batch_ys}))
