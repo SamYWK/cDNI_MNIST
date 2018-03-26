@@ -41,10 +41,10 @@ def main():
     X_train, X_test, y_train, y_test = load_data('mnist_train.csv')
     n, d = X_train.shape
     batch_size = 200
-    epochs = 200
+    epochs = 50
     learning_rate = 0.009
-    inv_epochs = 200
-    inv_learning_rate = 0.05
+    inv_epochs = 50
+    inv_learning_rate = 0.009
     g_1 = tf.Graph()
     
     with g_1.as_default():
@@ -64,7 +64,7 @@ def main():
         y3, yW3, yb3 = add_layer(tf.stop_gradient(y2), 256, 256, activation = tf.nn.sigmoid, name = 'ylayer_3')
         
         with tf.name_scope('loss_1'):
-            loss_1 = tf.reduce_mean(tf.reduce_sum(tf.square(x1 - y3), axis = 1))
+            loss_1 = tf.reduce_mean(tf.reduce_sum(tf.square(x1 - y1), axis = 1))
         with tf.name_scope('train_step_1'):
             train_step_1 = tf.train.AdamOptimizer(learning_rate).minimize(loss_1)
         
@@ -74,7 +74,7 @@ def main():
             train_step_2 = tf.train.AdamOptimizer(learning_rate).minimize(loss_2)
         
         with tf.name_scope('loss_3'):
-            loss_3 = tf.reduce_mean(tf.reduce_sum(tf.square(x3 - y1), axis = 1))
+            loss_3 = tf.reduce_mean(tf.reduce_sum(tf.square(x3 - y3), axis = 1))
         with tf.name_scope('train_step_3'):
             train_step_3 = tf.train.AdamOptimizer(learning_rate).minimize(loss_3)
         
@@ -85,7 +85,7 @@ def main():
             rev_loss_1 = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits = y_placeholder_hat, labels = y_placeholder))
         with tf.name_scope('rev_train_step_1'):
             rev_train_step_1 = tf.train.AdamOptimizer(inv_learning_rate).minimize(rev_loss_1)
-        '''
+        
         #inverse 2
         y1_hat, iW2, ib2 = add_layer(tf.stop_gradient(y2), 256, 256, activation = tf.nn.sigmoid, name = 'invlayer_2')
         with tf.name_scope('y1_stop'):
@@ -103,11 +103,11 @@ def main():
             rev_loss_3 = tf.reduce_mean(tf.reduce_sum(tf.square(y2_hat - y2_stop), axis = 1))
         with tf.name_scope('rev_train_step_3'):
             rev_train_step_3 = tf.train.AdamOptimizer(inv_learning_rate).minimize(rev_loss_3)
-        '''
+        
         train_step = [train_step_1, train_step_2, train_step_3]
-        reverse_step = [rev_train_step_1]
+        reverse_step = [rev_train_step_1, rev_train_step_2, rev_train_step_3]
         loss = [loss_1, loss_2, loss_3]
-        reverse_loss = [rev_loss_1]
+        reverse_loss = [rev_loss_1, rev_loss_2, rev_loss_3]
         
         #prediction
         with tf.name_scope('accuracy'):
