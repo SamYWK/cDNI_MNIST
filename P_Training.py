@@ -43,7 +43,7 @@ def main():
     batch_size = 200
     epochs = 50
     learning_rate = 0.009
-    inv_epochs = 50
+    inv_epochs = 100
     inv_learning_rate = 0.009
     g_1 = tf.Graph()
     
@@ -55,7 +55,7 @@ def main():
         
         #forward
         x1, xW1, xb1 = add_layer(X_placeholder, 784, 256, activation = tf.nn.sigmoid, name = 'xlayer_1')
-        y1, yW1, yb1 = add_layer(y_placeholder, 10, 256, activation = None, name = 'ylayer_1')
+        y1, yW1, yb1 = add_layer(y_placeholder, 10, 256, activation = tf.nn.sigmoid, name = 'ylayer_1')
         
         x2, xW2, xb2 = add_layer(tf.stop_gradient(x1), 256, 256, activation = tf.nn.sigmoid, name = 'xlayer_2')
         y2, yW2, yb2 = add_layer(tf.stop_gradient(y1), 256, 256, activation = tf.nn.sigmoid, name = 'ylayer_2')
@@ -82,12 +82,13 @@ def main():
         #inverse 1
         y_placeholder_hat, iW1, ib1 = add_layer(tf.stop_gradient(y1), 256, 10, activation = None, name = 'invlayer_1')
         with tf.name_scope('rev_loss_1'):
-            rev_loss_1 = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits = y_placeholder_hat, labels = y_placeholder))
+             rev_loss_1 = tf.reduce_mean(tf.reduce_sum(tf.square(y_placeholder_hat - y_placeholder), axis = 1))
+            #rev_loss_1 = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits = y_placeholder_hat, labels = y_placeholder))
         with tf.name_scope('rev_train_step_1'):
             rev_train_step_1 = tf.train.AdamOptimizer(inv_learning_rate).minimize(rev_loss_1)
         
         #inverse 2
-        y1_hat, iW2, ib2 = add_layer(tf.stop_gradient(y2), 256, 256, activation = tf.nn.sigmoid, name = 'invlayer_2')
+        y1_hat, iW2, ib2 = add_layer(tf.stop_gradient(y2), 256, 256, activation = None, name = 'invlayer_2')
         with tf.name_scope('y1_stop'):
             y1_stop = tf.stop_gradient(y1)
         with tf.name_scope('rev_loss_2'):
@@ -96,7 +97,7 @@ def main():
             rev_train_step_2 = tf.train.AdamOptimizer(inv_learning_rate).minimize(rev_loss_2)
             
         #inverse 3
-        y2_hat, iW3, ib3 = add_layer(tf.stop_gradient(y3), 256, 256, activation = tf.nn.sigmoid, name = 'invlayer_3')
+        y2_hat, iW3, ib3 = add_layer(tf.stop_gradient(y3), 256, 256, activation = None, name = 'invlayer_3')
         with tf.name_scope('y2_stop'):
             y2_stop = tf.stop_gradient(y2)
         with tf.name_scope('rev_loss_3'):
@@ -111,7 +112,8 @@ def main():
         
         #prediction
         with tf.name_scope('accuracy'):
-            pred = tf.matmul(x3, iW1) + ib1
+            pred = tf.matmul((tf.matmul((tf.matmul(x3, iW3) + ib3), iW2)), iW1) + ib1
+            
             correct_prediction = tf.equal(tf.argmax(pred, 1), tf.argmax(y_placeholder, 1))
             accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
     
