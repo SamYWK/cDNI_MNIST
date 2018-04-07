@@ -44,31 +44,13 @@ def main():
         
         #forward
         x1 = tf.layers.dense(X_placeholder, 256, activation = tf.nn.sigmoid, name = 'xlayer_1')
-        y1 = tf.layers.dense(y_placeholder, 256, activation = None, name = 'ylayer_1')
+        y1 = tf.layers.dense(y_placeholder, 256, activation = tf.nn.sigmoid, name = 'ylayer_1')
         
         x2 = tf.layers.dense(tf.stop_gradient(x1), 256, activation = tf.nn.sigmoid, name = 'xlayer_2')
-        y2 = tf.layers.dense(tf.stop_gradient(y1), 256, activation = None, name = 'ylayer_2')
+        y2 = tf.layers.dense(tf.stop_gradient(y1), 256, activation = tf.nn.sigmoid, name = 'ylayer_2')
         
         x3 = tf.layers.dense(tf.stop_gradient(x2), 256, activation = tf.nn.sigmoid, name = 'xlayer_3')
         y3 = tf.layers.dense(tf.stop_gradient(y2), 256, activation = tf.nn.sigmoid, name = 'ylayer_3')
-        
-        
-        with tf.name_scope('loss_1'):
-            loss_1 = tf.losses.mean_squared_error(predictions = x1, labels = y1)
-        with tf.name_scope('train_step_1'):
-            train_step_1 = tf.train.AdamOptimizer(learning_rate).minimize(loss_1)
-        
-        with tf.name_scope('loss_2'):
-            loss_2 = tf.losses.mean_squared_error(predictions = x2, labels = y2)
-        with tf.name_scope('train_step_2'):
-            train_step_2 = tf.train.AdamOptimizer(learning_rate).minimize(loss_2)
-        
-        with tf.name_scope('loss_3'):
-            loss_3 = tf.losses.mean_squared_error(predictions = x3, labels = y3)
-        with tf.name_scope('train_step_3'):
-            train_step_3 = tf.train.AdamOptimizer(learning_rate).minimize(loss_3)
-        
-        #inverse mapping
         
         with tf.name_scope('y1_stop'):
             y1_stop = tf.stop_gradient(y1)
@@ -76,8 +58,27 @@ def main():
             y2_stop = tf.stop_gradient(y2)
         with tf.name_scope('y3_stop'):
             y3_stop = tf.stop_gradient(y3)
+        
+        
+        with tf.name_scope('loss_1'):
+            loss_1 = tf.losses.mean_squared_error(predictions = x1, labels = y1_stop)
+        with tf.name_scope('train_step_1'):
+            train_step_1 = tf.train.AdamOptimizer(learning_rate).minimize(loss_1)
+        
+        with tf.name_scope('loss_2'):
+            loss_2 = tf.losses.mean_squared_error(predictions = x2, labels = y2_stop)
+        with tf.name_scope('train_step_2'):
+            train_step_2 = tf.train.AdamOptimizer(learning_rate).minimize(loss_2)
+        
+        with tf.name_scope('loss_3'):
+            loss_3 = tf.losses.mean_squared_error(predictions = x3, labels = y3_stop)
+        with tf.name_scope('train_step_3'):
+            train_step_3 = tf.train.AdamOptimizer(learning_rate).minimize(loss_3)
+        
+        #inverse mapping
+        
         #inverse 1   
-        y_placeholder_hat = tf.layers.dense(y1_stop, 10, activation = None, name = 'invlayer_1')
+        y_placeholder_hat = tf.layers.dense(y1_stop, 10, activation = tf.nn.sigmoid, name = 'invlayer_1')
         iw1 = tf.get_default_graph().get_tensor_by_name(os.path.split(y_placeholder_hat.name)[0] + '/kernel:0')
         ib1 = tf.get_default_graph().get_tensor_by_name(os.path.split(y_placeholder_hat.name)[0] + '/bias:0')
         with tf.name_scope('rev_loss_1'):
@@ -86,7 +87,7 @@ def main():
             rev_train_step_1 = tf.train.AdamOptimizer(inv_learning_rate).minimize(rev_loss_1)
         
         #inverse 2
-        y1_hat = tf.layers.dense(y2_stop, 256, activation = None, name = 'invlayer_2')
+        y1_hat = tf.layers.dense(y2_stop, 256, activation = tf.nn.sigmoid, name = 'invlayer_2')
         iw2 = tf.get_default_graph().get_tensor_by_name(os.path.split(y1_hat.name)[0] + '/kernel:0')
         ib2 = tf.get_default_graph().get_tensor_by_name(os.path.split(y1_hat.name)[0] + '/bias:0')
         with tf.name_scope('rev_loss_2'):
@@ -110,7 +111,7 @@ def main():
         
         #prediction
         with tf.name_scope('accuracy'):
-            pred = tf.matmul((tf.matmul(tf.nn.sigmoid(tf.matmul(x3, iw3) + ib3), iw2) + ib2), iw1) + ib1
+            pred = tf.nn.sigmoid(tf.matmul(tf.nn.sigmoid(tf.matmul(tf.nn.sigmoid(tf.matmul(x3, iw3) + ib3), iw2) + ib2), iw1) + ib1)
             correct_prediction = tf.equal(tf.argmax(pred, 1), tf.argmax(y_placeholder, 1))
             accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
         
