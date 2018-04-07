@@ -110,7 +110,7 @@ def main():
         
         #prediction
         with tf.name_scope('accuracy'):
-            pred = tf.matmul(tf.nn.sigmoid(tf.matmul(tf.nn.sigmoid(tf.matmul(x3, iw3) + ib3), iw2) + ib2), iw1) + ib1
+            pred = tf.matmul((tf.matmul(tf.nn.sigmoid(tf.matmul(x3, iw3) + ib3), iw2) + ib2), iw1) + ib1
             correct_prediction = tf.equal(tf.argmax(pred, 1), tf.argmax(y_placeholder, 1))
             accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
         
