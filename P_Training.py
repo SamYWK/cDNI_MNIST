@@ -31,7 +31,7 @@ def main():
     batch_size = 200
     epochs = 100
     learning_rate = 0.00001
-    inv_epochs = 500
+    inv_epochs = 100
     inv_learning_rate = 0.01
     
     g_1 = tf.Graph()
