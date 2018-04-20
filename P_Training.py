@@ -12,6 +12,7 @@ from sklearn.preprocessing import OneHotEncoder
 from sklearn.preprocessing import MinMaxScaler
 import tensorflow as tf
 import os
+import time
 
 def load_data(file_name):
     df = pd.read_csv(file_name)
@@ -29,10 +30,10 @@ def main():
     X_train, X_test, y_train, y_test = load_data('mnist_train.csv')
     n, d = X_train.shape
     batch_size = 200
-    epochs = 50
+    epochs = 100
     learning_rate = 0.001
     inv_epochs = 100
-    inv_learning_rate = 0.0001
+    inv_learning_rate = 0.005
     
     g_1 = tf.Graph()
     
@@ -61,17 +62,17 @@ def main():
             y3_stop = tf.stop_gradient(y3)
             
         with tf.name_scope('loss_1'):
-            loss_1 = tf.losses.mean_squared_error(predictions = x1, labels = y3_stop)
+            loss_1 = tf.losses.mean_squared_error(predictions = x1, labels = y1)
         with tf.name_scope('train_step_1'):
             train_step_1 = tf.train.AdamOptimizer(learning_rate).minimize(loss_1)
         
         with tf.name_scope('loss_2'):
-            loss_2 = tf.losses.mean_squared_error(predictions = x2, labels = y2_stop)
+            loss_2 = tf.losses.mean_squared_error(predictions = x2, labels = y2)
         with tf.name_scope('train_step_2'):
             train_step_2 = tf.train.AdamOptimizer(learning_rate).minimize(loss_2)
         
         with tf.name_scope('loss_3'):
-            loss_3 = tf.losses.mean_squared_error(predictions = x3, labels = y1_stop)
+            loss_3 = tf.losses.mean_squared_error(predictions = x3, labels = y3)
         with tf.name_scope('train_step_3'):
             train_step_3 = tf.train.AdamOptimizer(learning_rate).minimize(loss_3)
             
@@ -115,9 +116,9 @@ def main():
         
         #prediction
         with tf.name_scope('accuracy'):
-            #ia2 = tf.nn.sigmoid(tf.matmul(ia3, iw3) + ib3)
-            #ia1 = tf.nn.sigmoid(tf.matmul(ia2, iw2) + ib2)
-            ia0 = tf.nn.sigmoid(tf.matmul(x1, iw1) + ib1)
+            ia2 = tf.nn.sigmoid(tf.matmul(x3, iw3) + ib3)
+            ia1 = tf.nn.sigmoid(tf.matmul(ia2, iw2) + ib2)
+            ia0 = tf.nn.sigmoid(tf.matmul(ia1, iw1) + ib1)
             pred = ia0
             correct_prediction = tf.equal(tf.argmax(pred, 1), tf.argmax(y_placeholder, 1))
             accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
@@ -135,13 +136,17 @@ def main():
             print(sess.run(accuracy, feed_dict = {X_placeholder : X_test, y_placeholder : y_test}))
             #writer
             #writer = tf.summary.FileWriter('logs/', sess.graph)
+            start_time = time.time()
             for epoch in range(epochs):
                 for batch in range(int (n / batch_size)):
                     batch_xs = X_train[(batch*batch_size) : (batch+1)*batch_size]
                     batch_ys = y_train[(batch*batch_size) : (batch+1)*batch_size]
                     sess.run(train_step+reverse_step, feed_dict = {X_placeholder : batch_xs, y_placeholder : batch_ys})
+                    
                     if batch % 500 == 0:
                         print(sess.run(loss+reverse_loss, feed_dict = {X_placeholder : batch_xs, y_placeholder : batch_ys}))
+                        print(sess.run(accuracy, feed_dict = {X_placeholder : X_test, y_placeholder : y_test}))
+            print(time.time()-start_time)
             '''
             #train reverse auto-encoder
             for epoch in range(inv_epochs):
@@ -153,7 +158,7 @@ def main():
                         print(sess.run(reverse_loss, feed_dict = {X_placeholder : batch_xs, y_placeholder : batch_ys}))
                         #numbers = np.append(numbers, sess.run(loss, feed_dict={X_placeholder: batch_xs, y_placeholder: batch_ys}))
             '''
-            print(sess.run(accuracy, feed_dict = {X_placeholder : X_test[1:1000], y_placeholder : y_test[1001:2000]}))
+            print(sess.run(accuracy, feed_dict = {X_placeholder : X_test, y_placeholder : y_test}))
             
             #saver.save(sess, "./saver/model.ckpt")
         #np.savetxt('cDNI_edit_numbers.csv', numbers, delimiter=',')
