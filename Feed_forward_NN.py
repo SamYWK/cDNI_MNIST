@@ -15,7 +15,7 @@ import time
 
 def load_data(file_name):
     df = pd.read_csv(file_name)
-    X = df.drop(['label'], axis = 1).values
+    X = df.drop(['label'], axis = 1).values.astype(np.float32)
     #normalize X
     scaler = MinMaxScaler()
     X = scaler.fit_transform(X)
@@ -28,68 +28,50 @@ def load_data(file_name):
 def cDNI(X_train, X_test, y_train, y_test):
     n, d = X_train.shape
     numbers = np.array([])
-    batch_size = 100
-    iterations = 100
+    batch_size = 200
+    learning_rate = 0.001
+    epochs = 50
     
-    X_placeholder = tf.placeholder(tf.float32, [None, 784])
-    y_placeholder = tf.placeholder(tf.float32, [None, 10])
+    g_1 = tf.Graph()
     
-    #add layers
-    W1 = tf.Variable(tf.zeros([784, 256]))
-    b1 = tf.Variable(tf.zeros([256]))
-    z1 = tf.matmul(X_placeholder, W1)# + b1
-    a1 = tf.nn.sigmoid(z1)
-    
-    W2 = tf.Variable(tf.random_normal([256, 256]))
-    b2 = tf.Variable(tf.random_normal([256]))
-    z2 = tf.matmul(a1, W2)# + b2
-    a2 = tf.nn.sigmoid(z2)
-    
-    W3 = tf.Variable(tf.random_normal([256, 256]))
-    b3 = tf.Variable(tf.random_normal([256]))
-    z3 = tf.matmul(a2, W3)# + b3
-    a3 = tf.nn.sigmoid(z3)
-    
-    W4 = tf.Variable(tf.random_normal([256, 256]))
-    b4 = tf.Variable(tf.random_normal([256]))
-    z4 = tf.matmul(a3, W4)# + b4
-    a4 = tf.nn.sigmoid(z4)
-    
-    W5 = tf.Variable(tf.random_normal([256, 256]))
-    b5 = tf.Variable(tf.random_normal([256]))
-    z5 = tf.matmul(a4, W5)# + b5
-    a5 = tf.nn.sigmoid(z5)
-    
-    W6 = tf.Variable(tf.random_normal([256, 10]))
-    b6 = tf.Variable(tf.random_normal([10]))
-    z6 = tf.matmul(a5, W6)# + b6
-    a6 = tf.nn.sigmoid(z6)
-    
-    #loss
-    cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels = y_placeholder, logits = z6))
-    train_step = tf.train.GradientDescentOptimizer(0.01).minimize(cross_entropy)
-    
-    #prediction
-    correct_prediction = tf.equal(tf.argmax(a6,1), tf.argmax(y_placeholder,1))
-    accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
-    
-    init = tf.global_variables_initializer()
-    
-    with tf.Session(config = tf.ConfigProto(allow_soft_placement = True)) as sess:
-        sess.run(init)
-        for iters in range(iterations):
-            for batch in range(int (n / batch_size)):
-                batch_xs = X_train[(batch*batch_size) : (batch+1)*batch_size]
-                batch_ys = y_train[(batch*batch_size) : (batch+1)*batch_size]
-                sess.run(train_step, feed_dict = {X_placeholder: batch_xs, y_placeholder: batch_ys})
-                if batch % 50 == 0:
-                    print(sess.run(cross_entropy, feed_dict = {X_placeholder: batch_xs, y_placeholder: batch_ys}))
-                    numbers = np.append(numbers, sess.run(cross_entropy, feed_dict={X_placeholder: batch_xs, y_placeholder: batch_ys}))
-        print('Accuracy :', sess.run(accuracy, feed_dict={X_placeholder: X_test, y_placeholder: y_test}))
+    with g_1.as_default():
+        with tf.device('/device:GPU:0'):
+            X_placeholder = tf.placeholder(tf.float32, [None, 784])
+            y_placeholder = tf.placeholder(tf.float32, [None, 10])
+            
+            a1 = tf.layers.dense(X_placeholder, 256, tf.nn.sigmoid, name = 'layer_1')
+            a2 = tf.layers.dense(a1, 256, tf.nn.sigmoid, name = 'layer_2')
+            a3 = tf.layers.dense(a2, 256, tf.nn.sigmoid, name = 'layer_3')
+            a4 = tf.layers.dense(a3, 256, tf.nn.sigmoid, name = 'layer_4')
+            a5 = tf.layers.dense(a4, 256, tf.nn.sigmoid, name = 'layer_5')
+            a6 = tf.layers.dense(a5, 10, tf.nn.sigmoid, name = 'layer_6')
+            
+            #loss
+            loss = tf.losses.mean_squared_error(labels = y_placeholder, predictions = a6)
+            train_step = tf.train.AdamOptimizer(learning_rate).minimize(loss)
+            
+            #prediction
+            correct_prediction = tf.equal(tf.argmax(a6,1), tf.argmax(y_placeholder,1))
+            accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+            
+            init = tf.global_variables_initializer()
+        config = tf.ConfigProto(allow_soft_placement = False, log_device_placement = True)
+        config.gpu_options.allow_growth = True
+        
+        with tf.Session(config = config) as sess:
+            sess.run(init)
+            for iters in range(epochs):
+                for batch in range(int (n / batch_size)):
+                    batch_xs = X_train[(batch*batch_size) : (batch+1)*batch_size]
+                    batch_ys = y_train[(batch*batch_size) : (batch+1)*batch_size]
+                    sess.run(train_step, feed_dict = {X_placeholder: batch_xs, y_placeholder: batch_ys})
+                    if batch % 500 == 0:
+                        print(sess.run(loss, feed_dict = {X_placeholder: batch_xs, y_placeholder: batch_ys}))
+                        
+            print('Accuracy :', sess.run(accuracy, feed_dict={X_placeholder: X_test, y_placeholder: y_test}))
     np.savetxt('feed_forward_NN_numbers.csv', numbers, delimiter=',')
     
 def main():
-    print('')
     X_train, X_test, y_train, y_test = load_data('mnist_train.csv')
     start_time = time.time()
     cDNI(X_train, X_test, y_train, y_test)
