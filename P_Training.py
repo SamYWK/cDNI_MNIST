@@ -30,7 +30,7 @@ def main():
     X_train, X_test, y_train, y_test = load_data('mnist_train.csv')
     n, d = X_train.shape
     batch_size = 200
-    epochs = 50
+    epochs = 100
     learning_rate = 0.001
     inv_epochs = 100
     inv_learning_rate = 0.005
@@ -54,6 +54,15 @@ def main():
             x3 = tf.layers.dense(tf.stop_gradient(x2), 256, activation = tf.nn.sigmoid, name = 'xlayer_3')
             y3 = tf.layers.dense(tf.stop_gradient(y2), 256, activation = tf.nn.sigmoid, name = 'ylayer_3')
             
+            x4 = tf.layers.dense(tf.stop_gradient(x3), 256, activation = tf.nn.sigmoid, name = 'xlayer_4')
+            y4 = tf.layers.dense(tf.stop_gradient(y3), 256, activation = tf.nn.sigmoid, name = 'ylayer_4')
+            
+            x5 = tf.layers.dense(tf.stop_gradient(x4), 256, activation = tf.nn.sigmoid, name = 'xlayer_5')
+            y5 = tf.layers.dense(tf.stop_gradient(y4), 256, activation = tf.nn.sigmoid, name = 'ylayer_5')
+            
+            x6 = tf.layers.dense(tf.stop_gradient(x5), 256, activation = tf.nn.sigmoid, name = 'xlayer_6')
+            y6 = tf.layers.dense(tf.stop_gradient(y5), 256, activation = tf.nn.sigmoid, name = 'ylayer_6')
+            
             
             with tf.name_scope('y1_stop'):
                 y1_stop = tf.stop_gradient(y1)
@@ -61,6 +70,12 @@ def main():
                 y2_stop = tf.stop_gradient(y2)
             with tf.name_scope('y3_stop'):
                 y3_stop = tf.stop_gradient(y3)
+            with tf.name_scope('y4_stop'):
+                y4_stop = tf.stop_gradient(y4)
+            with tf.name_scope('y5_stop'):
+                y5_stop = tf.stop_gradient(y5)
+            with tf.name_scope('y6_stop'):
+                y6_stop = tf.stop_gradient(y6)
                 
             with tf.name_scope('loss_1'):
                 loss_1 = tf.losses.mean_squared_error(predictions = x1, labels = y1)
@@ -76,8 +91,23 @@ def main():
                 loss_3 = tf.losses.mean_squared_error(predictions = x3, labels = y3)
             with tf.name_scope('train_step_3'):
                 train_step_3 = tf.train.AdamOptimizer(learning_rate).minimize(loss_3)
+                
+            with tf.name_scope('loss_4'):
+                loss_4 = tf.losses.mean_squared_error(predictions = x4, labels = y4)
+            with tf.name_scope('train_step_4'):
+                train_step_4 = tf.train.AdamOptimizer(learning_rate).minimize(loss_4)
+                
+            with tf.name_scope('loss_5'):
+                loss_5 = tf.losses.mean_squared_error(predictions = x5, labels = y5)
+            with tf.name_scope('train_step_5'):
+                train_step_5 = tf.train.AdamOptimizer(learning_rate).minimize(loss_5)
+                
+            with tf.name_scope('loss_6'):
+                loss_6 = tf.losses.mean_squared_error(predictions = x6, labels = y6)
+            with tf.name_scope('train_step_6'):
+                train_step_6 = tf.train.AdamOptimizer(learning_rate).minimize(loss_6)
             
-        with tf.device('/cpu:0'):
+        #with tf.device('/cpu:0'):
             #inverse mapping
             
             #inverse 1   
@@ -106,16 +136,46 @@ def main():
                 rev_loss_3 =  tf.losses.mean_squared_error(predictions = y2_hat, labels = y2_stop)
             with tf.name_scope('rev_train_step_3'):
                 rev_train_step_3 = tf.train.AdamOptimizer(inv_learning_rate).minimize(rev_loss_3)
+                
+            #inverse 4
+            y3_hat = tf.layers.dense(y4, 256, activation = tf.nn.sigmoid, name = 'invlayer_4')
+            iw4 = tf.get_default_graph().get_tensor_by_name(os.path.split(y3_hat.name)[0] + '/kernel:0')
+            ib4 = tf.get_default_graph().get_tensor_by_name(os.path.split(y3_hat.name)[0] + '/bias:0')
+            with tf.name_scope('rev_loss_4'):
+                rev_loss_4 =  tf.losses.mean_squared_error(predictions = y3_hat, labels = y3_stop)
+            with tf.name_scope('rev_train_step_4'):
+                rev_train_step_4 = tf.train.AdamOptimizer(inv_learning_rate).minimize(rev_loss_4)
+                
+            #inverse 5
+            y4_hat = tf.layers.dense(y5, 256, activation = tf.nn.sigmoid, name = 'invlayer_5')
+            iw5 = tf.get_default_graph().get_tensor_by_name(os.path.split(y4_hat.name)[0] + '/kernel:0')
+            ib5 = tf.get_default_graph().get_tensor_by_name(os.path.split(y4_hat.name)[0] + '/bias:0')
+            with tf.name_scope('rev_loss_5'):
+                rev_loss_5 =  tf.losses.mean_squared_error(predictions = y4_hat, labels = y4_stop)
+            with tf.name_scope('rev_train_step_5'):
+                rev_train_step_5 = tf.train.AdamOptimizer(inv_learning_rate).minimize(rev_loss_5)
+                
+            #inverse 6
+            y5_hat = tf.layers.dense(y6, 256, activation = tf.nn.sigmoid, name = 'invlayer_6')
+            iw6 = tf.get_default_graph().get_tensor_by_name(os.path.split(y5_hat.name)[0] + '/kernel:0')
+            ib6 = tf.get_default_graph().get_tensor_by_name(os.path.split(y5_hat.name)[0] + '/bias:0')
+            with tf.name_scope('rev_loss_6'):
+                rev_loss_6 =  tf.losses.mean_squared_error(predictions = y5_hat, labels = y5_stop)
+            with tf.name_scope('rev_train_step_6'):
+                rev_train_step_6 = tf.train.AdamOptimizer(inv_learning_rate).minimize(rev_loss_6)
     
     
-            train_step = [train_step_1, train_step_2, train_step_3]
-            reverse_step = [rev_train_step_1, rev_train_step_2, rev_train_step_3]
-            loss = [loss_1, loss_2, loss_3]
-            reverse_loss = [rev_loss_1, rev_loss_2, rev_loss_3]
+            train_step = [train_step_1, train_step_2, train_step_3, train_step_4, train_step_5, train_step_6]
+            reverse_step = [rev_train_step_1, rev_train_step_2, rev_train_step_3, rev_train_step_4, rev_train_step_5, rev_train_step_6]
+            loss = [loss_1, loss_2, loss_3, loss_4, loss_5, loss_6]
+            reverse_loss = [rev_loss_1, rev_loss_2, rev_loss_3, rev_loss_4, rev_loss_5, rev_loss_6]
             
             #prediction
             with tf.name_scope('accuracy'):
-                ia2 = tf.nn.sigmoid(tf.matmul(x3, iw3) + ib3)
+                ia5 = tf.nn.sigmoid(tf.matmul(x6, iw6) + ib6)
+                ia4 = tf.nn.sigmoid(tf.matmul(ia5, iw5) + ib5)
+                ia3 = tf.nn.sigmoid(tf.matmul(ia4, iw4) + ib4)
+                ia2 = tf.nn.sigmoid(tf.matmul(ia3, iw3) + ib3)
                 ia1 = tf.nn.sigmoid(tf.matmul(ia2, iw2) + ib2)
                 ia0 = tf.nn.sigmoid(tf.matmul(ia1, iw1) + ib1)
                 pred = ia0
