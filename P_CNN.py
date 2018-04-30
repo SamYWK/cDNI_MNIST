@@ -30,19 +30,19 @@ def main():
     X_train, X_test, y_train, y_test = load_data('mnist_train.csv')
     n, d = X_train.shape
     batch_size = 200
-    epochs = 200
+    epochs = 100
     learning_rate = 0.001
     inv_epochs = 100
-    inv_learning_rate = 0.005
+    inv_learning_rate = 0.001
     
     g_1 = tf.Graph()
     
     with g_1.as_default():
         with tf.device('/device:GPU:0'):
             with tf.name_scope('X_placeholder'):
-                X_placeholder = tf.placeholder(tf.float32, [None, 784], name = 'x_inputs')
+                X_placeholder = tf.placeholder(tf.float32, [None, 784])
             with tf.name_scope('y_placeholder'):
-                y_placeholder = tf.placeholder(tf.float32, [None, 10], name = 'y_inputs')
+                y_placeholder = tf.placeholder(tf.float32, [None, 10])
             
             X_resahpe = tf.reshape(X_placeholder, [-1, 28, 28, 1])
             
@@ -52,10 +52,10 @@ def main():
                     filters = 32,
                     kernel_size = 5,
                     padding = 'same',
-                    activation = tf.nn.relu, name = 'xlayer_1')
+                    activation = tf.nn.relu)
             pool1 = tf.layers.max_pooling2d(inputs = x1, pool_size=[2, 2], strides=2)
             pool1_flat = tf.reshape(pool1, [-1, 14*14*32])
-            y1 = tf.layers.dense(y_placeholder, (14*14*32), activation = tf.nn.relu, name = 'ylayer_1')
+            y1 = tf.layers.dense(y_placeholder, (14*14*32), activation = tf.nn.relu)
             
             
             x2 = tf.layers.conv2d(
@@ -63,10 +63,10 @@ def main():
                     filters = 64,
                     kernel_size = 5,
                     padding = 'same',
-                    activation = tf.nn.relu, name = 'xlayer_2')
+                    activation = tf.nn.relu)
             pool2 = tf.layers.max_pooling2d(inputs = x2, pool_size=[2, 2], strides=2)
-            pool2_flat = tf.reshape(pool2, [-1, 14*14*64])
-            y2 = tf.layers.dense(tf.stop_gradient(y1), (14*14*64), activation = tf.nn.relu, name = 'ylayer_2')
+            pool2_flat = tf.reshape(pool2, [-1, 7*7*64])
+            y2 = tf.layers.dense(tf.stop_gradient(y1), (7*7*64), activation = tf.nn.relu)
             
             #x3 = tf.layers.dense(tf.stop_gradient(x2), 256, activation = tf.nn.sigmoid, name = 'xlayer_3')
             #y3 = tf.layers.dense(tf.stop_gradient(y2), 256, activation = tf.nn.sigmoid, name = 'ylayer_3')
@@ -96,9 +96,9 @@ def main():
             '''
         #with tf.device('/cpu:0'):
             #inverse mapping
-            '''
+            
             #inverse 1   
-            y_placeholder_hat = tf.layers.dense(y1, 10, activation = tf.nn.relu, name = 'invlayer_1')
+            y_placeholder_hat = tf.layers.dense(y1, 10, activation = tf.nn.sigmoid)
             iw1 = tf.get_default_graph().get_tensor_by_name(os.path.split(y_placeholder_hat.name)[0] + '/kernel:0')
             ib1 = tf.get_default_graph().get_tensor_by_name(os.path.split(y_placeholder_hat.name)[0] + '/bias:0')
             with tf.name_scope('rev_loss_1'):
@@ -107,18 +107,18 @@ def main():
                 rev_train_step_1 = tf.train.AdamOptimizer(inv_learning_rate).minimize(rev_loss_1)
             
             #inverse 2
-            y1_hat = tf.layers.dense(y2, (14*14*32), activation = tf.nn.relu, name = 'invlayer_2')
+            y1_hat = tf.layers.dense(y2, (14*14*32), activation = tf.nn.sigmoid)
             iw2 = tf.get_default_graph().get_tensor_by_name(os.path.split(y1_hat.name)[0] + '/kernel:0')
             ib2 = tf.get_default_graph().get_tensor_by_name(os.path.split(y1_hat.name)[0] + '/bias:0')
             with tf.name_scope('rev_loss_2'):
-                rev_loss_2 = tf.losses.mean_squared_error(predictions = y1_hat, labels = y1_stop)
+                rev_loss_2 = tf.losses.mean_squared_error(predictions = y1_hat, labels = y1)
             with tf.name_scope('rev_train_step_2'):
                 rev_train_step_2 = tf.train.AdamOptimizer(inv_learning_rate).minimize(rev_loss_2)
-            '''
+            
             train_step = [train_step_1, train_step_2]
-            #reverse_step = [rev_train_step_1, rev_train_step_2]
+            reverse_step = [rev_train_step_1, rev_train_step_2]
             loss = [loss_1, loss_2]
-            #reverse_loss = [rev_loss_1, rev_loss_2]
+            reverse_loss = [rev_loss_1, rev_loss_2]
             '''  
             #inverse 3
             y2_hat = tf.layers.dense(y3, 256, activation = tf.nn.sigmoid, name = 'invlayer_3')
@@ -133,16 +133,15 @@ def main():
             reverse_step = [rev_train_step_1, rev_train_step_2, rev_train_step_3]
             loss = [loss_1, loss_2, loss_3]
             reverse_loss = [rev_loss_1, rev_loss_2, rev_loss_3]
-            
+            '''
             #prediction
             with tf.name_scope('accuracy'):
-                ia2 = tf.nn.sigmoid(tf.matmul(x3, iw3) + ib3)
-                ia1 = tf.nn.sigmoid(tf.matmul(ia2, iw2) + ib2)
+                ia1 = tf.nn.sigmoid(tf.matmul(pool2_flat, iw2) + ib2)
                 ia0 = tf.nn.sigmoid(tf.matmul(ia1, iw1) + ib1)
                 pred = ia0
                 correct_prediction = tf.equal(tf.argmax(pred, 1), tf.argmax(y_placeholder, 1))
                 accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
-            '''
+            
         #initializer
         init = tf.global_variables_initializer()
         config = tf.ConfigProto(allow_soft_placement = False, log_device_placement = True)
@@ -161,10 +160,12 @@ def main():
                 for batch in range(int (n / batch_size)):
                     batch_xs = X_train[(batch*batch_size) : (batch+1)*batch_size]
                     batch_ys = y_train[(batch*batch_size) : (batch+1)*batch_size]
-                    sess.run(train_step, feed_dict = {X_placeholder : batch_xs, y_placeholder : batch_ys})
+                    sess.run(train_step+reverse_step, feed_dict = {X_placeholder : batch_xs, y_placeholder : batch_ys})
                     
                     if batch % 500 == 0:
-                        print(sess.run(loss, feed_dict = {X_placeholder : batch_xs, y_placeholder : batch_ys}))
+                        print(sess.run(accuracy, feed_dict = {X_placeholder : X_test, y_placeholder : y_test}))
+                        #print(sess.run(loss+reverse_loss, feed_dict = {X_placeholder : batch_xs, y_placeholder : batch_ys}))
+            print(sess.run(accuracy, feed_dict = {X_placeholder : X_test, y_placeholder : y_test}))
             print(time.time()-start_time)
             '''
             #train reverse auto-encoder
