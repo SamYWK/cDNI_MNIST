@@ -29,11 +29,10 @@ def load_data(file_name):
 def main():
     X_train, X_test, y_train, y_test = load_data('mnist_train.csv')
     n, d = X_train.shape
-    batch_size = 200
-    epochs = 200
+    batch_size = 32
+    epochs = 100
     learning_rate = 0.001
-    inv_epochs = 100
-    inv_learning_rate = 0.005
+    inv_learning_rate = 0.001
     
     g_1 = tf.Graph()
     
@@ -46,7 +45,6 @@ def main():
             
             #forward
             x1 = tf.layers.dense(X_placeholder, 256, activation = tf.nn.sigmoid, name = 'xlayer_1')
-            w1 = tf.get_default_graph().get_tensor_by_name(os.path.split(x1.name)[0] + '/kernel:0')
             y1 = tf.layers.dense(y_placeholder, 256, activation = tf.nn.sigmoid, name = 'ylayer_1')
             
             x2 = tf.layers.dense(tf.stop_gradient(x1), 256, activation = tf.nn.sigmoid, name = 'xlayer_2')
@@ -64,17 +62,17 @@ def main():
                 y3_stop = tf.stop_gradient(y3)
                 
             with tf.name_scope('loss_1'):
-                loss_1 = tf.losses.mean_squared_error(predictions = x1, labels = y1)
+                loss_1 = tf.losses.mean_squared_error(predictions = x1, labels = y1_stop)
             with tf.name_scope('train_step_1'):
                 train_step_1 = tf.train.AdamOptimizer(learning_rate).minimize(loss_1)
             
             with tf.name_scope('loss_2'):
-                loss_2 = tf.losses.mean_squared_error(predictions = x2, labels = y2)
+                loss_2 = tf.losses.mean_squared_error(predictions = x2, labels = y2_stop)
             with tf.name_scope('train_step_2'):
                 train_step_2 = tf.train.AdamOptimizer(learning_rate).minimize(loss_2)
             
             with tf.name_scope('loss_3'):
-                loss_3 = tf.losses.mean_squared_error(predictions = x3, labels = y3)
+                loss_3 = tf.losses.mean_squared_error(predictions = x3, labels = y3_stop)
             with tf.name_scope('train_step_3'):
                 train_step_3 = tf.train.AdamOptimizer(learning_rate).minimize(loss_3)
             
@@ -110,8 +108,6 @@ def main():
     
             train_step = [train_step_1, train_step_2, train_step_3]
             reverse_step = [rev_train_step_1, rev_train_step_2, rev_train_step_3]
-            loss = [loss_1, loss_2, loss_3]
-            reverse_loss = [rev_loss_1, rev_loss_2, rev_loss_3]
             
             #prediction
             with tf.name_scope('accuracy'):
@@ -132,9 +128,9 @@ def main():
         with tf.Session(config = config) as sess:
             sess.run(init)
             #saver.restore(sess, "./saver/model.ckpt")
-            print(sess.run(accuracy, feed_dict = {X_placeholder : X_test, y_placeholder : y_test}))
             #writer
             #writer = tf.summary.FileWriter('logs/', sess.graph)
+            numbers = np.array([])
             start_time = time.time()
             for epoch in range(epochs):
                 for batch in range(int (n / batch_size)):
@@ -143,24 +139,10 @@ def main():
                     sess.run(train_step+reverse_step, feed_dict = {X_placeholder : batch_xs, y_placeholder : batch_ys})
                     
                     if batch % 500 == 0:
-                        print(sess.run(accuracy, feed_dict = {X_placeholder : batch_xs, y_placeholder : batch_ys}))
-            print(sess.run(tf.reduce_sum(w1), feed_dict = {X_placeholder : X_test, y_placeholder : y_test}))
+                        print(sess.run(accuracy, feed_dict = {X_placeholder : X_test, y_placeholder : y_test}))
+                        numbers = np.append(numbers, sess.run(accuracy, feed_dict={X_placeholder: X_test, y_placeholder: y_test}))
             print(time.time()-start_time)
-            '''
-            #train reverse auto-encoder
-            for epoch in range(inv_epochs):
-                for batch in range(int (n / batch_size)):
-                    batch_xs = X_train[(batch*batch_size) : (batch+1)*batch_size]
-                    batch_ys = y_train[(batch*batch_size) : (batch+1)*batch_size]
-                    sess.run(reverse_step, feed_dict = {X_placeholder : batch_xs,y_placeholder : batch_ys})
-                    if batch % 500 == 0:
-                        print(sess.run(reverse_loss, feed_dict = {X_placeholder : batch_xs, y_placeholder : batch_ys}))
-                        #numbers = np.append(numbers, sess.run(loss, feed_dict={X_placeholder: batch_xs, y_placeholder: batch_ys}))
-            '''
-            #print(sess.run(accuracy, feed_dict = {X_placeholder : X_test, y_placeholder : y_test}))
-            
-            #saver.save(sess, "./saver/model.ckpt")
-        #np.savetxt('cDNI_edit_numbers.csv', numbers, delimiter=',')
+        np.savetxt('P_DNN_accu.csv', numbers, delimiter=',')
         
 if __name__ == '__main__':
     main()

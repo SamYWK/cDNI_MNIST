@@ -29,10 +29,9 @@ def load_data(file_name):
 def main():
     X_train, X_test, y_train, y_test = load_data('mnist_train.csv')
     n, d = X_train.shape
-    batch_size = 200
+    batch_size = 32
     epochs = 100
     learning_rate = 0.001
-    inv_epochs = 100
     inv_learning_rate = 0.001
     
     g_1 = tf.Graph()

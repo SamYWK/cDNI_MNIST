@@ -28,7 +28,7 @@ def load_data(file_name):
 def cDNI(X_train, X_test, y_train, y_test):
     n, d = X_train.shape
     numbers = np.array([])
-    batch_size = 200
+    batch_size = 32
     learning_rate = 0.001
     epochs = 100
     
@@ -44,18 +44,14 @@ def cDNI(X_train, X_test, y_train, y_test):
             a3 = tf.layers.dense(a2, 256, tf.nn.sigmoid, name = 'layer_3')
             a4 = tf.layers.dense(a3, 256, tf.nn.sigmoid, name = 'layer_4')
             a5 = tf.layers.dense(a4, 256, tf.nn.sigmoid, name = 'layer_5')
-            a6 = tf.layers.dense(a5, 256, tf.nn.sigmoid, name = 'layer_6')
-            a7 = tf.layers.dense(a6, 256, tf.nn.sigmoid, name = 'layer_7')
-            a8 = tf.layers.dense(a7, 256, tf.nn.sigmoid, name = 'layer_8')
-            a9 = tf.layers.dense(a8, 256, tf.nn.sigmoid, name = 'layer_9')
-            a10 = tf.layers.dense(a9, 10, tf.nn.sigmoid, name = 'layer_10')
+            a6 = tf.layers.dense(a5, 10, tf.nn.sigmoid, name = 'layer_6')
             
             #loss
-            loss = tf.losses.mean_squared_error(labels = y_placeholder, predictions = a10)
+            loss = tf.losses.mean_squared_error(labels = y_placeholder, predictions = a6)
             train_step = tf.train.AdamOptimizer(learning_rate).minimize(loss)
             
             #prediction
-            correct_prediction = tf.equal(tf.argmax(a10,1), tf.argmax(y_placeholder,1))
+            correct_prediction = tf.equal(tf.argmax(a6,1), tf.argmax(y_placeholder,1))
             accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
             
             init = tf.global_variables_initializer()
@@ -70,10 +66,10 @@ def cDNI(X_train, X_test, y_train, y_test):
                     batch_ys = y_train[(batch*batch_size) : (batch+1)*batch_size]
                     sess.run(train_step, feed_dict = {X_placeholder: batch_xs, y_placeholder: batch_ys})
                     if batch % 500 == 0:
-                        print(sess.run(loss, feed_dict = {X_placeholder: batch_xs, y_placeholder: batch_ys}))
+                        print(sess.run(accuracy, feed_dict = {X_placeholder: X_test, y_placeholder: y_test}))
+                        numbers = np.append(numbers, sess.run(accuracy, feed_dict={X_placeholder: X_test, y_placeholder: y_test}))
                         
-            print('Accuracy :', sess.run(accuracy, feed_dict={X_placeholder: X_test, y_placeholder: y_test}))
-    np.savetxt('feed_forward_NN_numbers.csv', numbers, delimiter=',')
+    np.savetxt('DNN_accu.csv', numbers, delimiter=',')
     
 def main():
     X_train, X_test, y_train, y_test = load_data('mnist_train.csv')
