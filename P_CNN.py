@@ -135,30 +135,29 @@ def main():
             #writer = tf.summary.FileWriter('logs/', sess.graph)
             start_time = time.time()
             for epoch in range(epochs):
+                score = 0
+                for test_batch in range(int (n_test / batch_size)):
+                    batch_xs_test = X_test[(test_batch*batch_size) : (test_batch+1)*batch_size]
+                    batch_ys_test = y_test[(test_batch*batch_size) : (test_batch+1)*batch_size]
+                    score += sum(sess.run(correct_count, feed_dict = {X_placeholder : batch_xs_test, y_placeholder : batch_ys_test}))
+                for i in range(int (n_test / batch_size)*batch_size, n_test):
+                    batch_xs_test = X_test[i].reshape(1, -1)
+                    batch_ys_test = y_test[i].reshape(1, -1)
+                    score += sum(sess.run(correct_count, feed_dict = {X_placeholder : batch_xs_test, y_placeholder : batch_ys_test}))
+                print(epoch, score/n_test)
+                numbers = np.append(numbers, score/n_test)
+                
                 for batch in range(int (n / batch_size)):
                     batch_xs = X_train[(batch*batch_size) : (batch+1)*batch_size]
                     batch_ys = y_train[(batch*batch_size) : (batch+1)*batch_size]
                     sess.run(train_step+reverse_step, feed_dict = {X_placeholder : batch_xs, y_placeholder : batch_ys})
-                    
-                    if batch % 500 == 0:
-                        score = 0
-                        for test_batch in range(int (n_test / batch_size)):
-                            batch_xs_test = X_test[(test_batch*batch_size) : (test_batch+1)*batch_size]
-                            batch_ys_test = y_test[(test_batch*batch_size) : (test_batch+1)*batch_size]
-                            score += sum(sess.run(correct_count, feed_dict = {X_placeholder : batch_xs_test, y_placeholder : batch_ys_test}))
-                        for i in range(int (n_test / batch_size)*batch_size, n_test):
-                            batch_xs_test = X_test[i].reshape(1, -1)
-                            batch_ys_test = y_test[i].reshape(1, -1)
-                            score += sum(sess.run(correct_count, feed_dict = {X_placeholder : batch_xs_test, y_placeholder : batch_ys_test}))
-                        print(score/n_test)
-#                        numbers = np.append(numbers, sess.run(accuracy, feed_dict={X_placeholder: batch_xs, y_placeholder: batch_ys}))
 
             print(time.time()-start_time)
 
 #            print(sess.run(accuracy, feed_dict = {X_placeholder : X_test, y_placeholder : y_test}))
             
             #saver.save(sess, "./saver/model.ckpt")
-#        np.savetxt('PCNN_accu.csv', numbers, delimiter=',')
+        np.savetxt('PCNN_accu.csv', numbers, delimiter=',')
         
 if __name__ == '__main__':
     main()
