@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-Created on Sat Jan 27 12:25:46 2018
+Created on Sun Jul 29 14:25:00 2018
 
-@author: pig84
+@author: SamKao
 """
 
 import numpy as np
@@ -10,13 +10,21 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.preprocessing import MinMaxScaler
-import multiprocessing as mp
-from multiprocessing.managers import BaseManager
+import tensorflow as tf
+import os
 import time
+from multiprocessing import Process
+from time import sleep
+
+cluster = tf.train.ClusterSpec({"worker": [ "localhost:3333", "localhost:3334" ], "ps": ["localhost:3335"]})
+batch_size = 32
+epochs = 100
+learning_rate = 0.001
+inv_learning_rate = 0.001
 
 def load_data(file_name):
     df = pd.read_csv(file_name)
-    X = df.drop(['label'], axis = 1).values.astype(np.float64)
+    X = df.drop(['label'], axis = 1).values.astype(np.float32)
     #normalize X
     scaler = MinMaxScaler()
     X = scaler.fit_transform(X)
@@ -26,130 +34,225 @@ def load_data(file_name):
     y = enc.fit_transform(y).toarray()
     return train_test_split(X, y, test_size = 0.2, random_state = 1)
 
-def sigmoid(x):
-    np.seterr( over='ignore' ) #ignore sigmoid overflow
-    return 1 / (1 + np.exp(-x))
-
-def sigmoid_out2deriv(out):
-    return out * (1 - out)
-
-def stable_softmax(X):
-    n, d = X.shape
-    exps = np.exp(X - np.max(X))
-    exps_sum = np.sum(exps, axis = 1)
-    for _ in range(n):
-        exps[_, :] = exps[_, :] / exps_sum[_]
-    return exps
-
-def cross_entropy(logits, labels, epsilon = 1e-12):
-    logits = np.clip(logits, epsilon, 1. - epsilon)
-    ce = -labels*np.log(logits + 1e-9)
-    return ce
-
-class network(object):
-    
-    def __init__(self,input_dim, output_dim):
-        self.weights = np.random.randn(input_dim, output_dim)
-        self.bias = np.random.randn(output_dim)
-    
-def network_training(q, count, Global_variable, X_train, y_train, process_id):
-    n, d = X_train.shape
-    batch_size = 200
-    iterations = 50
-    learning_rate = 0.001
-    
-    for iters in range(iterations):
-        for batch in range(int(n / batch_size)):
-            inputs = X_train[(batch*batch_size) : (batch+1)*batch_size]
-            ground_truth = y_train[(batch*batch_size) : (batch+1)*batch_size]
-            
-            a1 = sigmoid(inputs.dot(Global_variable.W1) + Global_variable.b1) #input
-            
-            a2 = sigmoid(a1.dot(Global_variable.W2) + Global_variable.b2)
-
-            z3 = a2.dot(Global_variable.W3) + Global_variable.b3
-            a3 = stable_softmax(z3)
-            
-            ce = cross_entropy(logits = a3, labels = ground_truth) #loss
-            
-            if count.value % 10 == 0:
-                loss = np.sum(ce)/200
-                q.put(loss)
-                print(process_id, ':', loss)
-            count.value += 1
-
-            layer_3_delta = a3 - ground_truth #gradient
-            layer_2_delta = layer_3_delta.dot(Global_variable.W3.T)
-            Global_variable.W3 -= a2.T.dot(layer_3_delta) * learning_rate
-            Global_variable.b3 -= np.average(layer_3_delta, axis=0) * learning_rate
-            
-            layer_1_delta = layer_2_delta.dot(Global_variable.W2.T)
-            Global_variable.W2 -= a1.T.dot(layer_2_delta) * learning_rate
-            Global_variable.b2 -= np.average(layer_2_delta, axis=0) * learning_rate
-            
-            Global_variable.W1 -= inputs.T.dot(layer_1_delta) * learning_rate
-            Global_variable.b1 -= np.average(layer_1_delta, axis=0) * learning_rate
-            
-    #print(process_id, 'process end.')
-
-#inherit BaseManager
-#class MyManager(BaseManager):
-#    pass
-
-#register shared class
-#MyManager.register('network', network)
-
-if __name__ == '__main__':
-    print('Start')
-    X_train, X_test, y_train, y_test = load_data('mnist_train.csv')
-    n, d = X_train.shape
-    process_num = 6
-    section_size = int(n/process_num)
-    np.random.seed(1)
-    #start manager
-    #manager = MyManager()
-    #manager.start()
-    
-    #layer_1 = manager.network(d, 256, nonlin = sigmoid, nonlin_deriv = sigmoid_out2deriv)
-    layer_1 = network(d, 256)
-    layer_2 = network(256, 256)
-    layer_3 = network(256, 10)
-    
-    #shared variables
-    manager = mp.Manager()
-    Global_variable = manager.Namespace()
-    count = mp.Value('i', 0)
-    
-    Global_variable.W1 = layer_1.weights
-    Global_variable.W2 = layer_2.weights
-    Global_variable.W3 = layer_3.weights
-    Global_variable.b1 = layer_1.bias
-    Global_variable.b2 = layer_2.bias
-    Global_variable.b3 = layer_3.bias
-    
-    #create queue
-    mp_manager = mp.Manager()
-    q = mp_manager.Queue()
-    
-    #create processes
-    processes = []
-    for process in range(process_num):
-        p = mp.Process(target = network_training, args = (q, count, Global_variable,\
-            X_train[(process*section_size) : (process+1)*section_size], y_train[(process*section_size) : (process+1)*section_size], process))
-        processes.append(p)
-    start_time = time.time()
-    #start process
-    for process in processes:
-        process.start()
-    
-    #join process
-    for process in processes:
-        process.join()
-    end_time = time.time()
-    #save results
-    results = []
-    for _ in range(q.qsize()):
-        results.append(q.get())
+def ps():
+    print('ps running')
+    with tf.device('/job:ps/task:0'):
+        with tf.name_scope('X_placeholder'):
+            X_placeholder = tf.placeholder(tf.float32, [None, 784])
+        with tf.name_scope('y_placeholder'):
+            y_placeholder = tf.placeholder(tf.float32, [None, 10])
         
-    np.savetxt('parallel_results.csv', np.asarray(results), delimiter=',')
-    print("It cost %f sec" % (end_time-start_time))
+        X_resahpe = tf.reshape(X_placeholder, [-1, 28, 28, 1], name = 'X_resahpe')
+        
+        #forward
+        
+        x1 = tf.layers.conv2d(
+                inputs = X_resahpe,
+                filters = 32,
+                kernel_size = 5,
+                padding = 'same',
+                activation = tf.nn.relu,
+                name = 'x1')
+        pool1 = tf.layers.max_pooling2d(inputs = x1, pool_size=[2, 2], strides=2, name = 'pool1')
+        pool1_flat = tf.reshape(pool1, [-1, 14*14*32], name = 'pool1_flat')
+        dense_1 = tf.layers.dense(pool1_flat, 256, activation = tf.nn.sigmoid, name = 'dense_1')
+        y1 = tf.layers.dense(y_placeholder, 256, activation = tf.nn.sigmoid, name = 'y1')
+        
+        x2 = tf.layers.conv2d(
+                inputs = tf.stop_gradient(pool1),
+                filters = 64,
+                kernel_size = 5,
+                padding = 'same',
+                activation = tf.nn.relu,
+                name = 'x2')
+        pool2 = tf.layers.max_pooling2d(inputs = x2, pool_size=[2, 2], strides=2, name = 'pool2')
+        pool2_flat = tf.reshape(pool2, [-1, 7*7*64], name = 'pool2_flat')
+        dense_2 = tf.layers.dense(pool2_flat, 256, activation = tf.nn.sigmoid, name = 'dense_2')
+        y2 = tf.layers.dense(tf.stop_gradient(y1), 256, activation = tf.nn.sigmoid, name = 'y2')
+        
+        
+        with tf.name_scope('y1_stop'):
+            y1_stop = tf.stop_gradient(y1)
+        with tf.name_scope('y2_stop'):
+            y2_stop = tf.stop_gradient(y2)
+        #with tf.name_scope('y3_stop'):
+            #y3_stop = tf.stop_gradient(y3)
+            
+        #inverse 1   
+        y_placeholder_hat = tf.layers.dense(y1, 10, activation = tf.nn.sigmoid, name = 'y_placeholder_hat')
+        iw1 = tf.get_default_graph().get_tensor_by_name(os.path.split(y_placeholder_hat.name)[0] + '/kernel:0')
+        ib1 = tf.get_default_graph().get_tensor_by_name(os.path.split(y_placeholder_hat.name)[0] + '/bias:0')
+        
+        
+        #inverse 2
+        y1_hat = tf.layers.dense(y2, 256, activation = tf.nn.sigmoid, name = 'y1_hat')
+        iw2 = tf.get_default_graph().get_tensor_by_name(os.path.split(y1_hat.name)[0] + '/kernel:0')
+        ib2 = tf.get_default_graph().get_tensor_by_name(os.path.split(y1_hat.name)[0] + '/bias:0')
+        
+    with tf.device('/job:worker/task:0'):
+        with tf.name_scope('loss_1'):
+            loss_1 = tf.losses.mean_squared_error(predictions = dense_1, labels = y1_stop)
+        with tf.name_scope('train_step_1'):
+            train_step_1 = tf.train.AdamOptimizer(learning_rate).minimize(loss_1)
+            
+        with tf.name_scope('loss_2'):
+            loss_2 = tf.losses.mean_squared_error(predictions = dense_2, labels = y2_stop)
+        with tf.name_scope('train_step_2'):
+            train_step_2 = tf.train.AdamOptimizer(learning_rate).minimize(loss_2)
+    
+    with tf.device('/job:worker/task:1'):
+        with tf.name_scope('rev_loss_1'):
+            rev_loss_1 = tf.losses.mean_squared_error(predictions = y_placeholder_hat, labels = y_placeholder)
+        with tf.name_scope('rev_train_step_1'):
+            rev_train_step_1 = tf.train.AdamOptimizer(inv_learning_rate).minimize(rev_loss_1)
+            
+        with tf.name_scope('rev_loss_2'):
+            rev_loss_2 = tf.losses.mean_squared_error(predictions = y1_hat, labels = y1_stop)
+        with tf.name_scope('rev_train_step_2'):
+            rev_train_step_2 = tf.train.AdamOptimizer(inv_learning_rate).minimize(rev_loss_2)
+        
+        
+    server = tf.train.Server(cluster, job_name="ps", task_index=0) 
+    
+    sess = tf.Session(target=server.target)
+    sess.run(tf.global_variables_initializer())
+    server.join()
+    
+def worker(worker_num, n, n_test, X_train, X_test, y_train, y_test):
+    with tf.device('/job:ps/task:0'):
+        with tf.name_scope('X_placeholder'):
+            X_placeholder = tf.placeholder(tf.float32, [None, 784])
+        with tf.name_scope('y_placeholder'):
+            y_placeholder = tf.placeholder(tf.float32, [None, 10])
+        
+        X_resahpe = tf.reshape(X_placeholder, [-1, 28, 28, 1], name = 'X_resahpe')
+        
+        #forward
+        
+        x1 = tf.layers.conv2d(
+                inputs = X_resahpe,
+                filters = 32,
+                kernel_size = 5,
+                padding = 'same',
+                activation = tf.nn.relu,
+                name = 'x1')
+        pool1 = tf.layers.max_pooling2d(inputs = x1, pool_size=[2, 2], strides=2, name = 'pool1')
+        pool1_flat = tf.reshape(pool1, [-1, 14*14*32], name = 'pool1_flat')
+        dense_1 = tf.layers.dense(pool1_flat, 256, activation = tf.nn.sigmoid, name = 'dense_1')
+        y1 = tf.layers.dense(y_placeholder, 256, activation = tf.nn.sigmoid, name = 'y1')
+        
+        x2 = tf.layers.conv2d(
+                inputs = tf.stop_gradient(pool1),
+                filters = 64,
+                kernel_size = 5,
+                padding = 'same',
+                activation = tf.nn.relu,
+                name = 'x2')
+        pool2 = tf.layers.max_pooling2d(inputs = x2, pool_size=[2, 2], strides=2, name = 'pool2')
+        pool2_flat = tf.reshape(pool2, [-1, 7*7*64], name = 'pool2_flat')
+        dense_2 = tf.layers.dense(pool2_flat, 256, activation = tf.nn.sigmoid, name = 'dense_2')
+        y2 = tf.layers.dense(tf.stop_gradient(y1), 256, activation = tf.nn.sigmoid, name = 'y2')
+        
+        
+        with tf.name_scope('y1_stop'):
+            y1_stop = tf.stop_gradient(y1)
+        with tf.name_scope('y2_stop'):
+            y2_stop = tf.stop_gradient(y2)
+        #with tf.name_scope('y3_stop'):
+            #y3_stop = tf.stop_gradient(y3)
+         
+        #inverse 1   
+        y_placeholder_hat = tf.layers.dense(y1, 10, activation = tf.nn.sigmoid, name = 'y_placeholder_hat')
+        iw1 = tf.get_default_graph().get_tensor_by_name(os.path.split(y_placeholder_hat.name)[0] + '/kernel:0')
+        ib1 = tf.get_default_graph().get_tensor_by_name(os.path.split(y_placeholder_hat.name)[0] + '/bias:0')
+        
+        
+        #inverse 2
+        y1_hat = tf.layers.dense(y2, 256, activation = tf.nn.sigmoid, name = 'y1_hat')
+        iw2 = tf.get_default_graph().get_tensor_by_name(os.path.split(y1_hat.name)[0] + '/kernel:0')
+        ib2 = tf.get_default_graph().get_tensor_by_name(os.path.split(y1_hat.name)[0] + '/bias:0')
+        
+    
+    with tf.device('/job:worker/task:0'):
+        with tf.name_scope('loss_1'):
+            loss_1 = tf.losses.mean_squared_error(predictions = dense_1, labels = y1_stop)
+        with tf.name_scope('train_step_1'):
+            train_step_1 = tf.train.AdamOptimizer(learning_rate).minimize(loss_1)
+        
+        with tf.name_scope('loss_2'):
+            loss_2 = tf.losses.mean_squared_error(predictions = dense_2, labels = y2_stop)
+        with tf.name_scope('train_step_2'):
+            train_step_2 = tf.train.AdamOptimizer(learning_rate).minimize(loss_2)
+            
+#        #prediction
+#        with tf.name_scope('accuracy'):
+#            ia1 = tf.nn.sigmoid(tf.matmul(dense_2, iw2) + ib2)
+#            ia0 = tf.nn.sigmoid(tf.matmul(ia1, iw1) + ib1)
+#            pred = ia0
+#            correct_prediction = tf.equal(tf.argmax(pred, 1), tf.argmax(y_placeholder, 1))
+#            correct_count = tf.cast(correct_prediction, tf.float32)
+#            accuracy = tf.reduce_mean(correct_count)
+    with tf.device('/job:worker/task:1'):
+        with tf.name_scope('rev_loss_1'):
+            rev_loss_1 = tf.losses.mean_squared_error(predictions = y_placeholder_hat, labels = y_placeholder)
+        with tf.name_scope('rev_train_step_1'):
+            rev_train_step_1 = tf.train.AdamOptimizer(inv_learning_rate).minimize(rev_loss_1)
+            
+        with tf.name_scope('rev_loss_2'):
+            rev_loss_2 = tf.losses.mean_squared_error(predictions = y1_hat, labels = y1_stop)
+        with tf.name_scope('rev_train_step_2'):
+            rev_train_step_2 = tf.train.AdamOptimizer(inv_learning_rate).minimize(rev_loss_2)
+        
+    train_step = [train_step_1, train_step_2]
+    reverse_step = [rev_train_step_1, rev_train_step_2]
+    config = tf.ConfigProto(allow_soft_placement = False, log_device_placement = True)
+    config.gpu_options.allow_growth = True
+    server = tf.train.Server(cluster, job_name="worker", task_index=worker_num, config=config) 
+    sess = tf.Session(target=server.target)
+    
+    for epoch in range(epochs):
+        for batch in range(int (n / batch_size)):
+            batch_xs = X_train[(batch*batch_size) : (batch+1)*batch_size]
+            batch_ys = y_train[(batch*batch_size) : (batch+1)*batch_size]
+            
+            if worker_num == 0:
+                sess.run(train_step, feed_dict = {X_placeholder : batch_xs, y_placeholder : batch_ys})
+            elif worker_num == 1:
+                sess.run(reverse_step, feed_dict = {X_placeholder : batch_xs, y_placeholder : batch_ys})
+            
+            if batch % 500 == 0:
+                print('Epoch :', epoch)
+                print('Loss', sess.run([loss_1, loss_2], feed_dict = {X_placeholder : batch_xs, y_placeholder : batch_ys}))
+                print('Re_Loss', sess.run([rev_loss_1, rev_loss_2], feed_dict = {X_placeholder : batch_xs, y_placeholder : batch_ys}))
+#                score = 0
+#                for test_batch in range(int (n_test / batch_size)):
+#                    batch_xs_test = X_test[(test_batch*batch_size) : (test_batch+1)*batch_size]
+#                    batch_ys_test = y_test[(test_batch*batch_size) : (test_batch+1)*batch_size]
+#                    score += sum(sess.run(correct_count, feed_dict = {X_placeholder : batch_xs_test, y_placeholder : batch_ys_test}))
+#                for i in range(int (n_test / batch_size)*batch_size, n_test):
+#                    batch_xs_test = X_test[i].reshape(1, -1)
+#                    batch_ys_test = y_test[i].reshape(1, -1)
+#                    score += sum(sess.run(correct_count, feed_dict = {X_placeholder : batch_xs_test, y_placeholder : batch_ys_test}))
+#                print(score/n_test)
+
+def main():
+    X_train, X_test, y_train, y_test = load_data('mnist_train.csv')
+    
+    n, d = X_train.shape
+    n_test = X_test.shape[0]
+    
+    
+    
+    ps_proc = Process(target=ps)
+    w1_proc = Process(target=worker, args=(0, n, n_test, X_train, X_test, y_train, y_test))
+    w2_proc = Process(target=worker, args=(1, n, n_test, X_train, X_test, y_train, y_test))
+    ps_proc.start()
+    sleep(10)
+    w1_proc.start()
+    w2_proc.start()
+    ps_proc.join()
+    w1_proc.join()
+    w2_proc.join()
+        
+if __name__ == '__main__':
+    main()
