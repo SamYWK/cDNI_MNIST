@@ -128,7 +128,7 @@ def worker(worker_num, n, n_test, X_train, X_test, y_train, y_test):
     config.gpu_options.allow_growth = True
     server = tf.train.Server(cluster, job_name="worker", task_index=worker_num, config=config) 
     sess = tf.Session(target=server.target)
-    
+    sess.run(tf.global_variables_initializer())
     for epoch in range(epochs):
         for batch in range(int (n / batch_size)):
             batch_xs = X_train[(batch*batch_size) : (batch+1)*batch_size]
